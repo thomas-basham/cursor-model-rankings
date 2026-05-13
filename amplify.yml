@@ -9,7 +9,7 @@ frontend:
     build:
       commands:
         # SSR compute reads env from .env.production (Amplify Hosting Next.js pattern).
-        - env | grep -e CODING_MODEL_RANKINGS_TABLE -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e ADMIN_API_KEY >> .env.production || true
+        - env | grep -e CODING_MODEL_RANKINGS_TABLE -e DYNAMODB_REGION -e DYNAMODB_ACCESS_KEY_ID -e DYNAMODB_SECRET_ACCESS_KEY -e DYNAMODB_SESSION_TOKEN -e ADMIN_API_KEY >> .env.production || true
         - env | grep -e NEXT_PUBLIC_ >> .env.production || true
         - npm run build
   artifacts:
