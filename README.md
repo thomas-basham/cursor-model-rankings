@@ -1,36 +1,127 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# Cursor Model Rankings
 
-## Getting Started
+A small Next.js app that publishes a **weekly, research-backed leaderboard** of the coding models available **inside the Cursor IDE** (Composer 2 Fast, Claude Opus 4.7 high, Sonnet 4.6, GPT-5.3 Codex, GPT-5.5, etc.)—ranking them by **best features, speed, and what to actually use each one for in coding tasks**, with transparent sources and a draft → review → publish flow backed by DynamoDB.
 
-First, run the development server:
+## Tech stack
+
+- **Next.js** (App Router) + **Tailwind CSS**
+- **Amazon DynamoDB** (AWS SDK v3 DocumentClient)
+- **OpenAI API** for structured research (`scripts/update-rankings.js`)
+- **GitHub Actions** cron (Mondays 09:00 UTC) to refresh drafts
+
+## Prerequisites
+
+- Node.js 20+
+- An AWS account and DynamoDB table
+- OpenAI API access
+
+## DynamoDB setup
+
+Create a table (e.g. `CodingModelRankings`) with:
+
+| Attribute | Type   | Key            |
+|-----------|--------|----------------|
+| `pk`      | String | Partition key  |
+| `sk`      | String | Sort key       |
+
+No GSIs are required. The app stores:
+
+- **Ranking rows**: `pk = BATCH#<batchId>`, `sk = RANK#01` … `RANK#10`, plus attributes  
+  `batchId`, `rank`, `modelName`, `provider`, `codingScore`, `bestFor`, `strengths`, `weaknesses`, `pricingSummary`, `sourceUrls`, `status` (`DRAFT` | `PUBLISHED`), `updatedAt`.
+- **Meta rows**: `pk = META`, `sk = LATEST_PUBLISHED` or `LATEST_DRAFT`, with `batchId` and `updatedAt`.
+
+Example AWS CLI (adjust region/name):
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+aws dynamodb create-table \
+  --table-name CodingModelRankings \
+  --attribute-definitions AttributeName=pk,AttributeType=S AttributeName=sk,AttributeType=S \
+  --key-schema AttributeName=pk,KeyType=HASH AttributeName=sk,KeyType=RANGE \
+  --billing-mode PAY_PER_REQUEST \
+  --region us-east-1
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment variables
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+| Variable | Required for | Description |
+|----------|----------------|-------------|
+| `CODING_MODEL_RANKINGS_TABLE` | App, script, CI | DynamoDB table name (defaults to `CodingModelRankings` if unset—fine for local experiments only). |
+| `AWS_REGION` | App, script, CI | Region for DynamoDB. |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | Script, CI, local writes | Standard AWS credentials with `dynamodb:PutItem`, `Query`, `GetItem`, `BatchWriteItem`, `DeleteItem` on the table. |
+| `ADMIN_API_KEY` | Draft/publish APIs, admin UI | Shared secret; send as header `x-admin-api-key`. |
+| `OPENAI_API_KEY` | `update-rankings` script, CI | Key for OpenAI. |
+| `OPENAI_RANKINGS_MODEL` | Optional | Model id (default `gpt-4o-mini` in the script). |
+| `NEXT_PUBLIC_APP_URL` | Recommended in prod | Absolute site URL for server-side `fetch` to `/api/rankings` (e.g. `https://your-domain.vercel.app`). Falls back to `VERCEL_URL` on Vercel. |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+> **Vercel:** configure the same variables in the project settings. The build does not need OpenAI keys unless you run the script there (you normally run the script in GitHub Actions or locally).
 
-## Learn More
+## Local development
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+npm install
+cp .env.example .env.local   # if you maintain an example; otherwise export vars manually
+npm run dev
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open [http://localhost:3000](http://localhost:3000). The homepage calls `GET /api/rankings` (server-side `fetch`). Admin UI: [http://localhost:3000/admin](http://localhost:3000/admin).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Save a draft manually
 
-## Deploy on Vercel
+`POST /api/rankings/draft` with header `x-admin-api-key: <ADMIN_API_KEY>` and a JSON body that is **either** a raw array of 10 models **or** `{ "models": [ ... ] }`, each model matching the schema validated in `lib/rankingValidation.js`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Publish
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`POST /api/rankings/publish` with `{ "batchId": "<uuid>" }` and the same admin header.
+
+### Weekly draft from OpenAI (no publish)
+
+```bash
+export OPENAI_API_KEY=...
+export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=...
+export CODING_MODEL_RANKINGS_TABLE=CodingModelRankings
+npm run update-rankings -- "Optional extra instructions for this run"
+```
+
+This writes a **new draft** only (`saveDraftRanking`); it does **not** publish.
+
+## GitHub Actions secrets
+
+Workflow: `.github/workflows/update-rankings.yml` (cron **Monday 09:00 UTC** + `workflow_dispatch`).
+
+Configure repository secrets:
+
+- `OPENAI_API_KEY`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_REGION`
+- `CODING_MODEL_RANKINGS_TABLE`
+- `ADMIN_API_KEY` (optional for the script itself, but listed for parity with your env checklist; the draft script only needs DynamoDB + OpenAI)
+
+Optional **variable** (not secret): `OPENAI_RANKINGS_MODEL`.
+
+After the action runs, open the live `/admin` page, enter the admin key, **Load latest draft**, then **Publish draft** when satisfied.
+
+## Review / publish flow
+
+1. **Cron or manual** `npm run update-rankings` → new **DRAFT** batch in DynamoDB (`META` / `LATEST_DRAFT`).
+2. Visit **`/admin`**, paste **`ADMIN_API_KEY`**, load draft via **`GET /api/rankings/draft`** (proxied by the UI).
+3. Expand rows to inspect **sources** (same component as the homepage).
+4. Click **Publish** → **`POST /api/rankings/publish`** → rows become **`PUBLISHED`**, `META` / `LATEST_PUBLISHED` updates, prior published batch items are removed.
+
+## API summary
+
+- `GET /api/rankings` — latest **published** top 10 (public).
+- `GET /api/rankings/draft` — latest **draft** (requires `x-admin-api-key`).
+- `POST /api/rankings/draft` — save draft from JSON body (admin key).
+- `POST /api/rankings/publish` — publish a `batchId` (admin key).
+
+## Deploying to Vercel
+
+1. Push the repo and import it in Vercel.
+2. Set env vars: `CODING_MODEL_RANKINGS_TABLE`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `ADMIN_API_KEY`, `NEXT_PUBLIC_APP_URL` (your production URL).
+3. Ensure the AWS principal can reach DynamoDB from the **same** table/region (Vercel serverless = outbound internet; no VPC unless you configure it).
+4. Point the GitHub Action at the same table so weekly drafts land where production reads them.
+
+---
+
+MIT-licensed starter; swap research prompts and scoring rules to match your editorial standards.
