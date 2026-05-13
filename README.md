@@ -146,6 +146,8 @@ In **Amplify** → your app → **Hosting** → **Environment variables**, creat
 
 You do **not** need `OPENAI_API_KEY` in Amplify unless you change the build to run `npm run update-rankings` there; the usual flow keeps OpenAI + weekly draft in GitHub Actions.
 
+**If the homepage shows “Could not load credentials from any providers”:** the DynamoDB client found no credentials at runtime. Fix one of: (1) set **`DYNAMODB_ACCESS_KEY_ID`** and **`DYNAMODB_SECRET_ACCESS_KEY`** on the app (same IAM permissions as local) and **redeploy**, or (2) attach Amplify’s **[SSR compute role](https://docs.aws.amazon.com/amplify/latest/userguide/amplify-SSR-compute-role.html)** with DynamoDB policy on your table (no access-key env vars). Also set **`NEXT_PUBLIC_APP_URL`** to your live URL (e.g. `https://main.<id>.amplifyapp.com`) so server-side `fetch` hits the deployed host.
+
 ---
 
 MIT-licensed starter; swap research prompts and scoring rules to match your editorial standards.
