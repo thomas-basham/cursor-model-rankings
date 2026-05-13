@@ -1,0 +1,22 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - nvm install 20
+        - nvm use 20
+        - npm ci
+    build:
+      commands:
+        # SSR compute reads env from .env.production (Amplify Hosting Next.js pattern).
+        - env | grep -e CODING_MODEL_RANKINGS_TABLE -e AWS_REGION -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e ADMIN_API_KEY >> .env.production || true
+        - env | grep -e NEXT_PUBLIC_ >> .env.production || true
+        - npm run build
+  artifacts:
+    baseDirectory: .next
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*

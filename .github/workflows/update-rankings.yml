@@ -1,0 +1,35 @@
+name: Weekly ranking updates
+
+on:
+  schedule:
+    - cron: "0 9 * * 1"
+  workflow_dispatch: {}
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ranking research (draft only)
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          CODING_MODEL_RANKINGS_TABLE: ${{ secrets.CODING_MODEL_RANKINGS_TABLE }}
+          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
+          OPENAI_RANKINGS_MODEL: ${{ vars.OPENAI_RANKINGS_MODEL }}
+        run: npm run update-rankings
