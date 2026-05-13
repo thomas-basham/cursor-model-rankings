@@ -7,7 +7,7 @@ A small Next.js app that publishes a **weekly, research-backed leaderboard** of 
 - **Next.js** (App Router) + **Tailwind CSS**
 - **Amazon DynamoDB** (AWS SDK v3 DocumentClient)
 - **OpenAI API** for structured research (`scripts/update-rankings.js`)
-- **GitHub Actions** cron (Mondays 09:00 UTC) to refresh drafts
+- **GitHub Actions** cron (Mondays 09:00 UTC) to refresh and publish rankings
 
 ## Prerequisites
 
@@ -77,16 +77,17 @@ Open [http://localhost:3000](http://localhost:3000). The homepage calls `GET /ap
 
 `POST /api/rankings/publish` with `{ "batchId": "<uuid>" }` and the same admin header.
 
-### Weekly draft from OpenAI (no publish)
+### Weekly ranking from OpenAI
 
 ```bash
 export OPENAI_API_KEY=...
 export AWS_ACCESS_KEY_ID=... AWS_SECRET_ACCESS_KEY=... AWS_REGION=...  # or DYNAMODB_* equivalents
 export CODING_MODEL_RANKINGS_TABLE=CodingModelRankings
 npm run update-rankings -- "Optional extra instructions for this run"
+npm run update-rankings -- --publish "Optional extra instructions and publish immediately"
 ```
 
-This writes a **new draft** only (`saveDraftRanking`); it does **not** publish.
+By default this writes a **new draft** only (`saveDraftRanking`). Passing `--publish` immediately promotes that generated batch to **published**, which is what the homepage table reads.
 
 ## GitHub Actions secrets
 
@@ -99,18 +100,15 @@ Configure repository secrets:
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_REGION`
 - `CODING_MODEL_RANKINGS_TABLE`
-- `ADMIN_API_KEY` (optional for the script itself, but listed for parity with your env checklist; the draft script only needs DynamoDB + OpenAI)
 
 Optional **variable** (not secret): `OPENAI_RANKINGS_MODEL`.
 
-After the action runs, open the live `/admin` page, enter the admin key, **Load latest draft**, then **Publish draft** when satisfied.
+After the action runs, the generated ranking is published automatically and the homepage table updates from `LATEST_PUBLISHED`.
 
 ## Review / publish flow
 
-1. **Cron or manual** `npm run update-rankings` → new **DRAFT** batch in DynamoDB (`META` / `LATEST_DRAFT`).
-2. Visit **`/admin`**, paste **`ADMIN_API_KEY`**, load draft via **`GET /api/rankings/draft`** (proxied by the UI).
-3. Expand rows to inspect **sources** (same component as the homepage).
-4. Click **Publish** → **`POST /api/rankings/publish`** → rows become **`PUBLISHED`**, `META` / `LATEST_PUBLISHED` updates, prior published batch items are removed.
+1. **Cron or manual** `npm run update-rankings -- --publish` → new **DRAFT** batch in DynamoDB, then immediate publish to `META` / `LATEST_PUBLISHED`.
+2. Optional manual review flow: run `npm run update-rankings` without `--publish`, visit **`/admin`**, paste **`ADMIN_API_KEY`**, load the draft, then click **Publish**.
 
 ## API summary
 
@@ -124,7 +122,7 @@ After the action runs, open the live `/admin` page, enter the admin key, **Load 
 1. Push the repo and import it in Vercel.
 2. Set env vars: `CODING_MODEL_RANKINGS_TABLE`, `ADMIN_API_KEY`, `NEXT_PUBLIC_APP_URL`, and either `AWS_REGION` + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` or the `DYNAMODB_*` equivalents (see table above).
 3. Ensure the AWS principal can reach DynamoDB from the **same** table/region (Vercel serverless = outbound internet; no VPC unless you configure it).
-4. Point the GitHub Action at the same table so weekly drafts land where production reads them.
+4. Point the GitHub Action at the same table so weekly published rankings land where production reads them.
 
 ## Deploying to AWS Amplify
 
@@ -144,7 +142,7 @@ In **Amplify** → your app → **Hosting** → **Environment variables**, creat
 1. **Recommended:** Configure an [SSR compute IAM role](https://docs.aws.amazon.com/amplify/latest/userguide/amplify-SSR-compute-role.html) on the app with `dynamodb:GetItem`, `Query`, `PutItem`, `BatchWriteItem`, `DeleteItem` (and any other operations you use) on the table. Then **do not** set `DYNAMODB_ACCESS_KEY_ID` / `DYNAMODB_SECRET_ACCESS_KEY`.
 2. **Alternative:** Add **`DYNAMODB_ACCESS_KEY_ID`** and **`DYNAMODB_SECRET_ACCESS_KEY`** for an IAM principal that has those DynamoDB permissions. Optional **`DYNAMODB_SESSION_TOKEN`** for temporary keys.
 
-You do **not** need `OPENAI_API_KEY` in Amplify unless you change the build to run `npm run update-rankings` there; the usual flow keeps OpenAI + weekly draft in GitHub Actions.
+You do **not** need `OPENAI_API_KEY` in Amplify unless you change the build to run `npm run update-rankings` there; the usual flow keeps OpenAI research + weekly publish in GitHub Actions.
 
 **If the homepage shows “Could not load credentials from any providers”:** the DynamoDB client found no credentials at runtime. Fix one of: (1) set **`DYNAMODB_ACCESS_KEY_ID`** and **`DYNAMODB_SECRET_ACCESS_KEY`** on the app (same IAM permissions as local) and **redeploy**, or (2) attach Amplify’s **[SSR compute role](https://docs.aws.amazon.com/amplify/latest/userguide/amplify-SSR-compute-role.html)** with DynamoDB policy on your table (no access-key env vars). Also set **`NEXT_PUBLIC_APP_URL`** to your live URL (e.g. `https://main.<id>.amplifyapp.com`) so server-side `fetch` hits the deployed host.
 

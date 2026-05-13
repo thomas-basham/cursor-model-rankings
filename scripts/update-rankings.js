@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 import OpenAI from "openai";
-import { saveDraftRanking } from "../lib/modelsRepository.js";
+import {
+  publishDraftRanking,
+  saveDraftRanking,
+} from "../lib/modelsRepository.js";
 import { normalizeModels, parseDraftBody } from "../lib/rankingValidation.js";
 
 const DEFAULT_PROMPT = `You are an analyst preparing "Cursor Model Rankings", a weekly leaderboard ranking the coding models that ship inside the **Cursor IDE / Cursor Agent**. This is NOT a generic LLM leaderboard — restrict yourself to the models Cursor actually exposes to users for coding (Auto, Composer family, Anthropic Claude variants offered in Cursor, OpenAI GPT / Codex variants offered in Cursor, plus any other coding-focused models in Cursor's model picker).
@@ -58,7 +61,9 @@ async function main() {
     process.exit(1);
   }
 
-  const extra = process.argv.slice(2).join(" ").trim();
+  const args = process.argv.slice(2);
+  const publish = args.includes("--publish") || process.env.PUBLISH_RANKINGS === "true";
+  const extra = args.filter((arg) => arg !== "--publish").join(" ").trim();
   const userPrompt = extra
     ? `${DEFAULT_PROMPT}\n\nAdditional researcher instructions: ${extra}`
     : DEFAULT_PROMPT;
@@ -105,6 +110,12 @@ async function main() {
   const { batchId } = await saveDraftRanking(models);
   console.log("Saved draft ranking to DynamoDB.");
   console.log("batchId:", batchId);
+
+  if (publish) {
+    const { publishedAt } = await publishDraftRanking(batchId);
+    console.log("Published ranking to DynamoDB.");
+    console.log("publishedAt:", publishedAt);
+  }
 }
 
 main().catch((err) => {

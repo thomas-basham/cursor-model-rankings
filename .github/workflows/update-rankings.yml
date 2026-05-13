@@ -23,13 +23,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run ranking research (draft only)
+      - name: Run ranking research and publish
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
           CODING_MODEL_RANKINGS_TABLE: ${{ secrets.CODING_MODEL_RANKINGS_TABLE }}
-          ADMIN_API_KEY: ${{ secrets.ADMIN_API_KEY }}
           OPENAI_RANKINGS_MODEL: ${{ vars.OPENAI_RANKINGS_MODEL }}
-        run: npm run update-rankings
+        run: npm run update-rankings -- --publish
