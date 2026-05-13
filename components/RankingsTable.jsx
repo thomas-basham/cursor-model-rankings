@@ -2,18 +2,6 @@
 
 import { Fragment, useState } from "react";
 
-function formatUpdated(iso) {
-  if (!iso) return "—";
-  try {
-    return new Date(iso).toLocaleString(undefined, {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return iso;
-  }
-}
-
 /**
  * @param {object} props
  * @param {Array<Record<string, unknown>> | null} props.models
@@ -26,17 +14,15 @@ export function RankingsTable({ models }) {
   return (
     <div className="glass-panel overflow-hidden rounded-2xl">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[880px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[760px] border-collapse text-left text-sm">
           <thead>
             <tr className="border-b border-[var(--border)] bg-black/20 text-xs uppercase tracking-wider text-slate-400">
               <th className="px-4 py-3 font-medium">Rank</th>
-              <th className="px-4 py-3 font-medium">Model</th>
-              <th className="px-4 py-3 font-medium">Provider</th>
+              <th className="px-4 py-3 align-top font-medium">Model</th>
               <th className="px-4 py-3 font-medium">Coding Score</th>
-              <th className="px-4 py-3 font-medium">Best For</th>
+              <th className="px-4 py-3 align-top font-medium">Best For</th>
               <th className="px-4 py-3 font-medium">Speed</th>
-              <th className="px-4 py-3 font-medium">Last Updated</th>
-              <th className="px-4 py-3 font-medium w-10" aria-label="Expand details" />
+              <th className="px-4 py-3 align-top font-medium">Token usage</th>
             </tr>
           </thead>
           <tbody>
@@ -46,41 +32,43 @@ export function RankingsTable({ models }) {
               return (
                 <Fragment key={rank}>
                   <tr
-                    className="border-b border-[var(--border)]/60 hover:bg-white/[0.03] transition-colors"
+                    tabIndex={0}
+                    aria-expanded={expanded}
+                    aria-label={`${expanded ? "Collapse" : "Expand"} details for ${String(row.modelName)}`}
+                    onClick={() => setOpenRank(expanded ? null : rank)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setOpenRank(expanded ? null : rank);
+                      }
+                    }}
+                    className={`cursor-pointer border-b border-[var(--border)]/60 transition-colors hover:bg-white/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/60 focus-visible:ring-inset ${expanded ? "bg-white/[0.04]" : ""}`}
                   >
-                    <td className="px-4 py-3 font-mono text-sky-300 tabular-nums">
+                    <td className="px-4 py-3 align-top font-mono text-sky-300 tabular-nums">
                       #{rank}
                     </td>
-                    <td className="px-4 py-3 font-semibold text-slate-100">
-                      {String(row.modelName)}
+                    <td className="px-4 py-3 align-top">
+                      <div className="font-semibold text-slate-100">
+                        {String(row.modelName)}
+                      </div>
+                      <div className="mt-0.5 text-slate-400">{String(row.provider)}</div>
                     </td>
-                    <td className="px-4 py-3 text-slate-300">{String(row.provider)}</td>
-                    <td className="px-4 py-3 tabular-nums text-emerald-300">
+                    <td className="px-4 py-3 align-top tabular-nums text-emerald-300">
                       {row.codingScore}
                     </td>
-                    <td className="px-4 py-3 text-slate-300 max-w-[220px] truncate" title={String(row.bestFor)}>
+                    <td className="px-4 py-3 align-top text-slate-300 whitespace-normal break-words">
                       {String(row.bestFor)}
                     </td>
-                    <td className="px-4 py-3 text-slate-300 max-w-[160px] truncate" title={String(row.speed ?? row.pricingSummary ?? "")}>
+                    <td className="px-4 py-3 align-top text-slate-300 max-w-[160px] truncate" title={String(row.speed ?? row.pricingSummary ?? "")}>
                       {String(row.speed ?? row.pricingSummary ?? "—")}
                     </td>
-                    <td className="px-4 py-3 text-slate-400 whitespace-nowrap">
-                      {formatUpdated(row.updatedAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => setOpenRank(expanded ? null : rank)}
-                        className="focus-ring rounded-lg px-2 py-1 text-xs text-sky-300 hover:bg-sky-500/10"
-                        aria-expanded={expanded}
-                      >
-                        {expanded ? "Close" : "Sources"}
-                      </button>
+                    <td className="px-4 py-3 align-top text-slate-300 whitespace-normal break-words max-w-[220px]">
+                      {row.cursorUsage ? String(row.cursorUsage) : "—"}
                     </td>
                   </tr>
                   {expanded ? (
                     <tr className="bg-black/25">
-                      <td colSpan={8} className="px-4 py-4">
+                      <td colSpan={6} className="px-4 py-4">
                         <div className="grid gap-4 md:grid-cols-2">
                           <div>
                             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -103,24 +91,12 @@ export function RankingsTable({ models }) {
                             </ul>
                           </div>
                         </div>
-                        {row.cursorUsage || row.pricingSummary ? (
-                          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                            {row.cursorUsage ? (
-                              <div className="rounded-lg border border-[var(--border)]/70 bg-black/20 px-3 py-2 text-xs text-slate-300">
-                                <p className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
-                                  Cursor token usage
-                                </p>
-                                <p>{String(row.cursorUsage)}</p>
-                              </div>
-                            ) : null}
-                            {row.pricingSummary ? (
-                              <div className="rounded-lg border border-[var(--border)]/70 bg-black/20 px-3 py-2 text-xs text-slate-300">
-                                <p className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
-                                  Provider pricing
-                                </p>
-                                <p>{String(row.pricingSummary)}</p>
-                              </div>
-                            ) : null}
+                        {row.pricingSummary ? (
+                          <div className="mt-4 max-w-xl rounded-lg border border-[var(--border)]/70 bg-black/20 px-3 py-2 text-xs text-slate-300">
+                            <p className="mb-1 font-semibold uppercase tracking-wide text-slate-500">
+                              Provider pricing
+                            </p>
+                            <p>{String(row.pricingSummary)}</p>
                           </div>
                         ) : null}
                         <div className="mt-4">
