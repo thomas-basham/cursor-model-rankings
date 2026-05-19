@@ -60,10 +60,8 @@ export default async function Home() {
             Cursor Model Rankings
           </h1>
           <p className="max-w-2xl text-lg leading-relaxed text-slate-400">
-            A weekly-updated ranking of <span className="text-slate-200">Cursor&apos;s coding
-            models</span>—Composer 2 Fast, Claude Opus 4.7 high, Sonnet 4.6, GPT-5.3
-            Codex, and more. See best features, speed, and exactly what each one is
-            for before you pick a model for your next task.
+            A weekly leaderboard of coding models available in Cursor—ranked by
+            usefulness, speed, and what each is best for.
           </p>
         </section>
 
